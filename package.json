@@ -1,0 +1,18 @@
+{
+  "name": "instrumentation",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "adbkit": "^2.11.0",
+    "adbkit-apkreader": "^3.0.0",
+    "appium-adb": "^6.3.1",
+    "frida": "^10.6.52",
+    "line-by-line": "^0.1.6"
+  }
+}

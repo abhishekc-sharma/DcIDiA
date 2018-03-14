@@ -1,0 +1,5 @@
+<android.location.LocationProvider: java.lang.String getName()> (LOCATION_INFORMATION)
+<android.telephony.CellLocation: android.telephony.CellLocation getEmpty()> (LOCATION_INFORMATION)
+<android.location.Country: java.lang.String getCountryIso()> (LOCATION_INFORMATION)
+<android.net.NetworkInfo: int getType()> (NETWORK_INFORMATION)
+<android.app.Activity: void onCreate(android.os.Bundle)> (AAA)
