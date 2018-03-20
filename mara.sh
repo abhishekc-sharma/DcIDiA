@@ -379,10 +379,10 @@ function preliminary_stage_2(){
 	echo " "
 }
 
-function android_analysis(){
+#function (){
 	#Start android analysis
-	./owasp_static_android.sh
-}
+#	./owasp_static_android.sh
+#}
 
 #This feature is coming soon
 #function iOS_analysis(){
@@ -460,13 +460,13 @@ if [ $1 == '-s' ] || [ $1 == '--single-apk' ] ; then
 	reversing
 	decompile
 	decode
-    deobfuscate
-	manifest
-	preliminary_stage_1
-	cfg
-	compiler
-	preliminary_stage_2
-	android_analysis
+   #deobfuscate
+	#manifest
+	#preliminary_stage_1
+	#cfg
+	#compiler
+	#preliminary_stage_2
+	
 	final
 fi
 
@@ -511,7 +511,7 @@ if [ $1 == '-m' ] || [ $1 == '--multiple-apk' ] ; then
 	cfg
 	compiler
 	preliminary_stage_2
-	android_analysis
+	
 	final
 	done
 fi
@@ -548,7 +548,7 @@ if [ $1 == '-d' ] || [ $1 == '--dex' ] ; then
 	cfg
 	compiler
 	preliminary_stage_2
-	android_analysis
+	
 	final
 fi
 
@@ -594,7 +594,7 @@ if [ $1 == '-x' ] || [ $1 == '--multiple-dex' ] ; then
 	cfg
 	compiler
 	preliminary_stage_2
-	android_analysis
+	
 	final
 	done
 fi
@@ -626,7 +626,7 @@ if  [ $1 == '-j' ] || [ $1 == '--jar' ] ; then
 	echo "====================="
 	decompile
 	preliminary_stage_2
-	android_analysis
+	
 	final
 	exit 1
 fi
@@ -666,7 +666,7 @@ if [ $1 == '-r' ] || [ $1 == '--multiple-jar' ] ; then
 	echo -e "${yellow} Performing Analysis ${no_color}"
 	echo -e "${no_color}====================="
 	preliminary_stage_2
-	android_analysis
+	
 	final
 	done
 fi
@@ -698,6 +698,6 @@ if [ $1 == '-c' ] || [ $1 == '--class' ] ; then
 	echo "====================="
 	decompile
 	preliminary_stage_2
-	android_analysis
+	
 	final
 fi
