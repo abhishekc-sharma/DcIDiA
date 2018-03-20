@@ -4,6 +4,7 @@ import re
 import sys
 import os
 import subprocess
+import shutil
 
 try:  
    os.environ["MARA_PATH"]
@@ -11,6 +12,74 @@ except KeyError:
    print("Please set the environment variable MARA_PATH")
    sys.exit(1)
 
-mara_path = os.environ["MARA_PATH"]
+maraPath = os.environ["MARA_PATH"]
 
-sys.argv[1]
+try:
+	sys.argv[1]
+except IndexError:
+	print("Please provide path to dataset")
+	sys.exit(1)
+
+datasetPath = sys.argv[1]
+
+try:
+	sys.argv[2]
+except IndexError:
+	print("Need at least one file to get Sources/Sinks from")
+	sys.exit(1)
+
+sosiClassDict = {}
+for i in range(2, len(sys.argv)):
+    input_file = sys.argv[i]
+    with open(input_file) as f:
+        for line in f:
+            parts = re.compile("[<:\s(),>]").split(line)
+            parts = [part for part in parts if len(part) > 0]
+            if len(parts) <= 1:
+                continue
+            className = parts[0]
+            methodName = parts[2]
+            if not (className in sosiClassDict):
+                sosiClassDict[className] = Set([])
+            sosiClassDict[className].add(methodName)
+
+if os.path.exists(os.path.join(maraPath, "data")) and os.path.isdir(os.path.join(maraPath, "data")):
+	shutil.rmtree(os.path.join(maraPath, "data"))
+
+for ds_root, ds_dir, ds_file in os.walk(datasetPath):
+	for apk in ds_file:
+		if not os.path.splitext(apk)[1] == ".apk":
+			continue
+		args = [os.path.join("./", maraPath, "mara.sh"),"-s",os.path.join(ds_root,apk)]
+		subprocess.call(args, cwd=maraPath)
+		apkSmaliPath = os.path.join(maraPath, "data", apk, "smali/apktool/")
+		crt = open(apk+".txt","w")
+		for iroot, idirs, ifiles in os.walk(apkSmaliPath):
+			for name in ifiles:
+				with open(os.path.join(iroot,name),"r") as f:
+					for x in f:
+						if re.search('invoke-.*(Landroid|Ljava).*',x):
+							print((str(re.findall('\w+',x.split('}')[1].split('-')[0])).translate(None, '[],\'')).replace(" ",".")[1:], end = " ", file = crt)
+							print(':', end = " ", file = crt)
+							print(re.findall('\w+',x.split('}')[1].split('-')[1])[0],file = crt)
+		#subprocess.call(["sort",apkname+".txt", "-o" ,"sorted"+apkname+".txt"])
+		shutil.rmtree(os.path.join(maraPath, "data", apk))
+		crt.close()
+		final = open(os.path.join(ds_root ,"final"+apk+".txt"),"w")
+		lineset = set()
+		with open(apk+".txt", "r") as cur1:
+			for x in cur1:
+				if(len(x.split(":")) > 1):
+					cname = str(re.findall("\w+",x.split(":")[0])).translate(None,'[],\'').replace(" ",".")
+					mname = str(re.findall("\w+",x.split(":")[1])).translate(None,'[],\'')
+					if(cname in sosiClassDict):
+						if mname in sosiClassDict[cname]:
+								flag = 0
+								finwrite = cname+" : "+mname+'\n'
+								if finwrite not in lineset:
+									final.write(finwrite)
+									lineset.add(finwrite)
+		os.remove(apk+".txt")
+		final.close()
+			
+				
