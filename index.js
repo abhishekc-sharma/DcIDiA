@@ -5,9 +5,13 @@ const path = require('path');
 const fs = require('fs');
 const util = require('util');
 const apkreader = require('adbkit-apkreader');
-const apkPath = process.argv[2];
+const child_process = require('child_process');
+const datasetPath = process.argv[2];
 
 const readFile = util.promisify(fs.readFile);
+const readdir = util.promisify(fs.readdir);
+
+const generateScript = require('./generateScript');
 
 function sleep(ms) {
 	return new Promise(function(res, rej) {
@@ -15,47 +19,88 @@ function sleep(ms) {
 	});
 }
 
-async function run() {
-	const apkProp = path.parse(apkPath);
-	if(apkProp.ext != '.apk') {
-		throw new Error('Not valid apk file');
+function executeMonkeyRunner(appPkg) {
+	child_process.execSync(`adb shell monkey -p ${appPkg} -v 500`);
+}
+async function runApk(apkDirPath, {fDevice, deviceId}) {
+	const files = await readdir(apkDirPath);
+	let apkPath = null, apiPath = null;	
+	for(let file of files) {
+		if(path.extname(file) === '.apk') {
+			apkPath = path.join(apkDirPath, file);
+		} else if(path.extname(file) === '.txt') {
+			apiPath = path.join(apkDirPath, file);
+		}
 	}
-	console.log('Opening the APK');
+
+	if(apkPath === null || apiPath === null) {
+		throw new Error('Did not find apk or txt');
+	}
+	console.log('LOG Apk ' + apkPath + ' ' + apiPath);
 	const reader = await apkreader.open(apkPath);
-	console.log('Done');
-	console.log('Reading Manifest File');
 	const manifest = await reader.readManifest();
-	console.log('Done');
 	const appPkg = manifest.package;
-	if(!appPkg) {
-		throw new Error('Unable to get app package name');
-	}
-	const fDevice = await frida.getUsbDevice();
-	const devices = await client.listDevices();
-	console.log(devices);
-	const deviceId = devices[0].id;
-	console.log('Installing APK on device');
+	console.log('LOG Package ' + appPkg);
+	try {
+		await client.uninstall(deviceId, appPkg);
+	} catch(err) {}
 	await client.install(deviceId, apkPath);
-	console.log('Done');
 	const pid = await fDevice.spawn([appPkg]);
 	await fDevice.resume(pid);
-	await sleep(1000); 
-	console.log(pid);
+	await sleep(1000);
+	console.log('LOG PID ' + pid);
 	const session = await fDevice.attach(pid);
-	const scriptTxt = await readFile('s.js', 'utf-8');
+	console.log('LOG Session attached');
+	const scriptTxt = await generateScript(apiPath);
+	//console.log(apkPath + scriptTxt);
 	const script = await session.createScript(scriptTxt);
-	script.events.listen('message', message => {
-		console.log(message);	
+	console.log('LOG Created script');
+	try {
+		await script.load();
+	} catch(err) {
+		console.log('LOG intial timeout');
+		await waitDone(script);
+	}
+	console.log('LOG Recovered from timeout');
+	executeMonkeyRunner(appPkg);
+	console.log('LOG Monkeyed')
+	await client.uninstall(deviceId, appPkg);
+}
+function waitDone(script) {
+	return new Promise((resolve, reject) => {
+		console.log('LOG Waiting for done message')
+		script.events.listen('message', message => {
+			console.log('LOG Got Message')
+			console.log(message)
+			if(message.type === 'send' && message.payload && message.payload.done === 'Loaded') resolve();
+		});
 	});
-	await script.load();
-	setInterval(function() {}, 60 * 60 * 1000);
+}
+async function run() {
+	console.log('LOG Starting Run');
+	const fDevice = await frida.getUsbDevice(); 
+	const devices = await client.listDevices();
+	const deviceId = devices[0].id;
+	console.log('LOG Device ' + deviceId);
+	/*const files = await readdir(datasetPath);
+	for(let file of files) {
+		const fileStat = fs.statSync(path.join(datasetPath, file));
+		if(fileStat.isDirectory()) {
+			try {
+				await runApk(path.join(datasetPath, file), {fDevice, deviceId});
+			} catch(err) {
+				console.log('FATAL-ERROR ' + file + err);
+			}
+		}
+	}*/
+	await runApk(datasetPath, {fDevice, deviceId});
 }
 
-if(!apkPath) {
-	console.log('Provide path to apk');
+if(!datasetPath) {
+	console.log('Provide path to dataset');
 } else {
 	run().then(() => {
-		console.log('Done');
+		console.log('LOG Done');
 	}).catch(err => {
 		console.log(err);
 	});

@@ -39,9 +39,13 @@ for i in range(2, len(sys.argv)):
                 continue
             className = parts[0]
             methodName = parts[2]
+            argsString = ",".join(parts[3:-1])
             if not (className in sosiClassDict):
-                sosiClassDict[className] = Set([])
-            sosiClassDict[className].add(methodName)
+                sosiClassDict[className] = (Set([]), {})
+            sosiClassDict[className][0].add(methodName)
+            if not (methodName in sosiClassDict[className][1]):
+                sosiClassDict[className][1][methodName] = []
+            sosiClassDict[className][1][methodName].append(argsString)
 
 if os.path.exists(os.path.join(maraPath, "data")) and os.path.isdir(os.path.join(maraPath, "data")):
 	shutil.rmtree(os.path.join(maraPath, "data"))
@@ -58,12 +62,12 @@ for ds_root, ds_dir, ds_file in os.walk(datasetPath):
 			for name in ifiles:
 				with open(os.path.join(iroot,name),"r") as f:
 					for x in f:
-						if re.search('invoke-.*(Landroid|Ljava).*',x):
+						if re.search('invoke-.*(Landroid).*',x):
 							print((str(re.findall('\w+',x.split('}')[1].split('-')[0])).translate(None, '[],\'')).replace(" ",".")[1:], end = " ", file = crt)
 							print(':', end = " ", file = crt)
 							print(re.findall('\w+',x.split('}')[1].split('-')[1])[0],file = crt)
 		#subprocess.call(["sort",apkname+".txt", "-o" ,"sorted"+apkname+".txt"])
-		shutil.rmtree(os.path.join(maraPath, "data", apk))
+		#shutil.rmtree(os.path.join(maraPath, "data", apk))
 		crt.close()
 		final = open(os.path.join(ds_root ,"final"+apk+".txt"),"w")
 		lineset = set()
@@ -73,13 +77,14 @@ for ds_root, ds_dir, ds_file in os.walk(datasetPath):
 					cname = str(re.findall("\w+",x.split(":")[0])).translate(None,'[],\'').replace(" ",".")
 					mname = str(re.findall("\w+",x.split(":")[1])).translate(None,'[],\'')
 					if(cname in sosiClassDict):
-						if mname in sosiClassDict[cname]:
-								flag = 0
-								finwrite = cname+" : "+mname+'\n'
-								if finwrite not in lineset:
-									final.write(finwrite)
-									lineset.add(finwrite)
+						if mname in sosiClassDict[cname][0]:
+                                                    finwrite = ""
+                                                    for argsString in sosiClassDict[cname][1][mname]:
+							finwrite = "<" + cname + ": RETURN_TYPE " + mname + "(" + argsString + ")> (CATEGORY)\n"
+						        if finwrite not in lineset:
+							    final.write(finwrite)
+							    lineset.add(finwrite)
 		os.remove(apk+".txt")
 		final.close()
-			
+	
 				
