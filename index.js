@@ -19,9 +19,43 @@ function sleep(ms) {
 	});
 }
 
-function executeMonkeyRunner(appPkg) {
-	child_process.execSync(`adb shell monkey -p ${appPkg} -v 500`);
+async function executeMonkeyRunner(appPkg) {
+	//child_process.execSync(`adb shell input keyevnt 4`);
+	//await sleep(2000);
+	//console.log('LOG sent back button');
+	mrProcess = child_process.spawn('adb', ['shell', 'monkey', '-p', appPkg, '-v', '500', '--throttle', '50'], {stdio: 'inherit'});
+	console.log('LOG Started monkey runner');
+	return new Promise((res, rej) => {
+		function l() {
+			res();
+			mrProcess.removeListener('exit', l);
+			mrProcess.removeListener('error', m);
+		}
+
+		function m(err) {
+			rej(err)
+			mrProcess.removeListener('exit', l);
+			mrProcess.removeListener('error', m);
+		}
+		mrProcess.on('exit', l);
+		mrProcess.on('error', m);
+	});
 }
+
+function executeDroidBot(apkDirPath, apkFile) {
+	dbProcess = child_process.spawn('droidbot', ['-a', apkFile, '-o', path.join(apkDirPath, 'db_op')]);
+	console.log('LOG started droidbot');
+	return Promise.race([
+		new Promise((res, rej) => {
+			dbProcess.on('exit', () => res());
+			dbProcess.on('error', (err) => rej(err));
+		}),
+		sleep(1000 * 60 * 30).then(() => {
+			dbProcess.kill('SIGINT');
+		})
+	]);
+}
+
 async function runApk(apkDirPath, {fDevice, deviceId}) {
 	const files = await readdir(apkDirPath);
 	let apkPath = null, apiPath = null;	
@@ -41,30 +75,96 @@ async function runApk(apkDirPath, {fDevice, deviceId}) {
 	const manifest = await reader.readManifest();
 	const appPkg = manifest.package;
 	console.log('LOG Package ' + appPkg);
-	try {
-		await client.uninstall(deviceId, appPkg);
-	} catch(err) {}
-	await client.install(deviceId, apkPath);
-	const pid = await fDevice.spawn([appPkg]);
-	await fDevice.resume(pid);
-	await sleep(1000);
-	console.log('LOG PID ' + pid);
-	const session = await fDevice.attach(pid);
-	console.log('LOG Session attached');
-	const scriptTxt = await generateScript(apiPath);
-	//console.log(apkPath + scriptTxt);
-	const script = await session.createScript(scriptTxt);
-	console.log('LOG Created script');
-	try {
-		await script.load();
-	} catch(err) {
-		console.log('LOG intial timeout');
-		await waitDone(script);
+	const maxRetries = 3;
+	let retries = -1, progressCode = 0, pid, session, script;
+	while(progressCode < 7 && retries < maxRetries) {
+		retries++;
+		try {
+			switch(progressCode) {
+			case 0:
+				console.log('LOG Uninstalling');
+				try {
+					await client.uninstall(deviceId, appPkg);
+				} catch(err) {
+					console.log('FAILURE-LOG Uninstall Failed');
+					continue;
+				}
+				console.log('LOG Installing ' + deviceId);
+				child_process.spawnSync(`adb`, ['install', '-rg', apkPath]);
+				console.log('LOG Installed');
+				await sleep(5000);	
+				try {
+					pid = await fDevice.spawn([appPkg]);
+				} catch(err) {
+					console.log('FAILURE-LOG Spawn failed');
+					continue;
+				}
+				await sleep(1000);
+				progressCode++;
+			case 1:
+				try {
+					await fDevice.resume(pid);
+					console.log('LOG PID ' + pid);
+				} catch(err) {
+					console.log('FAILURE-LOG Resume failed');
+					continue;
+				}
+				await sleep(10000);
+				progressCode++;
+			case 2:
+				try {
+					session = await fDevice.attach(pid);
+					console.log('LOG Session attached');
+				} catch(err) {
+					console.log('FAILURE-LOG Attach failed');
+					continue;					
+				}
+				await sleep(1000);
+				progressCode++;
+			case 3:		
+				const scriptTxt = await generateScript(apiPath);
+				console.log('LOG Generated script');
+				try {
+					script = await session.createScript(scriptTxt);
+					console.log('LOG Created script');
+				} catch(err) {
+					console.log('FAILURE-LOG Create Script Failed');
+					continue;
+				}
+
+				progressCode++;
+			case 4:
+				try {
+					await script.load();
+				} catch(err) {
+					console.log('LOG intial timeout');
+					await waitDone(script);
+					console.log('LOG Recovered from timeout');
+				}
+				await sleep(10000);
+				progressCode++;
+				//console.log('LOG Granting permissions');
+				//child_process.execSync(`adb shell pm grant ${appPkg} android.permission.WRITE_EXTERNAL_STORAGE`);
+				//child_process.execSync(`adb shell pm grant ${appPkg} android.permission.READ_EXTERNAL_STORAGE`);
+				//console.log('LOG Granted permissions');
+			case 5:
+				await executeMonkeyRunner(appPkg);
+				console.log('LOG Monkeyed');
+				progressCode++;
+				//await executeDroidBot(apkDirPath, apkPath);
+			case 6:
+				try {
+					console.log('LOG Uninstalling App');
+					await client.uninstall(deviceId, appPkg);
+					console.log('LOG Uninstalled');
+				} catch(err) {continue;}
+				progressCode++;
+			}
+
+			
+		} catch(err) {console.log(err);}
 	}
-	console.log('LOG Recovered from timeout');
-	executeMonkeyRunner(appPkg);
-	console.log('LOG Monkeyed')
-	await client.uninstall(deviceId, appPkg);
+	console.log('LOG Done APK')
 }
 function waitDone(script) {
 	return new Promise((resolve, reject) => {

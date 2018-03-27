@@ -6,7 +6,11 @@ const getHookImplementationFn = function(className, methodName, argTypesStr) {
 	return `function() {
 		console.log('EVENT ${className} ${methodName}');
 		const args = [].slice.call(arguments);
-		const result = this.${methodName}.overload(${argTypesStr}).apply(this, args);
+		try {
+			const result = this.${methodName}.overload(${argTypesStr}).apply(this, args);
+		} catch(err) {
+			console.log('LOG ' + err);
+		}		
 		return result;
 	}`;
 }
