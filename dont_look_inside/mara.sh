@@ -458,7 +458,7 @@ if [ $1 == '-s' ] || [ $1 == '--single-apk' ] ; then
 
 	#Call the necessary functions
 	reversing
-	decompile
+	#decompile
 	decode
    #deobfuscate
 	#manifest
