@@ -452,7 +452,7 @@ if [ $1 == '-s' ] || [ $1 == '--single-apk' ] ; then
 	minions
 	echo -e "${no_color}[+] ${brown}Preparing ${blue}$file_"
 	cp $2 data/$file_/
-	unzip $2 -d data/$file_/unzipped >> /dev/null
+	unzip -o $2 -d data/$file_/unzipped >> /dev/null
 	echo -e "${blue}[INFO] - ${light_green}Done ${no_color}"
 	echo " "
 
