@@ -49,11 +49,13 @@ for i in range(2, len(sys.argv)):
 
 if os.path.exists(os.path.join(maraPath, "data")) and os.path.isdir(os.path.join(maraPath, "data")):
 	shutil.rmtree(os.path.join(maraPath, "data"))
-
+total = 0
 for ds_root, ds_dir, ds_file in os.walk(datasetPath):
 	for apk in ds_file:
 		if not os.path.splitext(apk)[1] == ".apk":
 			continue
+                total += 1
+                print("App " + str(total))
 		args = [os.path.join("./", maraPath, "mara.sh"),"-s",os.path.join(ds_root,apk)]
 		subprocess.call(args, cwd=maraPath)
 		apkSmaliPath = os.path.join(maraPath, "data", apk, "smali/apktool/")

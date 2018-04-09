@@ -23,27 +23,22 @@ async function executeMonkeyRunner(appPkg) {
 	//child_process.execSync(`adb shell input keyevnt 4`);
 	//await sleep(2000);
 	//console.log('LOG sent back button');
-	mrProcess = child_process.spawn('adb', ['shell', 'monkey', '-p', appPkg, '-v', '500', '--throttle', '50'], {stdio: 'inherit'});
+	mrProcess = child_process.spawn('adb', ['shell', 'monkey', '-p', appPkg, '-v', '--throttle', '500', '500']);
 	console.log('LOG Started monkey runner');
-	return new Promise((res, rej) => {
-		function l() {
-			res();
-			mrProcess.removeListener('exit', l);
-			mrProcess.removeListener('error', m);
-		}
-
-		function m(err) {
-			rej(err)
-			mrProcess.removeListener('exit', l);
-			mrProcess.removeListener('error', m);
-		}
-		mrProcess.on('exit', l);
-		mrProcess.on('error', m);
-	});
+	return Promise.race([new Promise((res, rej) => {
+				mrProcess.on('exit', () => res());
+				mrProcess.on('error', () => res());			
+			}),
+			sleep(1000 * 60 * 3).then(() => {
+				console.log('LOG Timing out Monkey')
+				mrProcess.kill('SIGINT');
+				res();
+			})
+		]);
 }
 
 function executeDroidBot(apkDirPath, apkFile) {
-	dbProcess = child_process.spawn('droidbot', ['-a', apkFile, '-o', path.join(apkDirPath, 'db_op')]);
+	dbProcess = child_process.spawn('droidbot', ['-a', apkFile, '-o', path.join(apkDirPath, 'db_op')], {stdio: 'inherit'});
 	console.log('LOG started droidbot');
 	return Promise.race([
 		new Promise((res, rej) => {
@@ -56,17 +51,29 @@ function executeDroidBot(apkDirPath, apkFile) {
 	]);
 }
 
-async function runApk(apkDirPath, {fDevice, deviceId}) {
+async function runApk(apkDirPath, obj) {
 	const files = await readdir(apkDirPath);
 	let apkPath = null, apiPath = null;	
 	for(let file of files) {
-		if(path.extname(file) === '.apk') {
-			apkPath = path.join(apkDirPath, file);
-		} else if(path.extname(file) === '.txt') {
+		if(path.extname(file) !== '.txt') {
+			continue;
+		} /*else if(path.extname(file) === '.txt') {
 			apiPath = path.join(apkDirPath, file);
+		}*/
+		console.log(file, apkDirPath);
+		const apiPath = path.join(apkDirPath, file);
+		const apkPath = path.join(apkDirPath, file.slice(5,file.indexOf('.')) + '.apk');	
+		try {
+			await runNow(apkPath, apiPath, obj);
+		} catch(err) {
+			const fDevice = obj.fDevice;
+			const deviceId = obj.deviceId;
+			console.log('LOG Error');
 		}
 	}
+}
 
+async function runNow(apkPath, apiPath, {fDevice, deviceId}) {
 	if(apkPath === null || apiPath === null) {
 		throw new Error('Did not find apk or txt');
 	}
@@ -84,19 +91,20 @@ async function runApk(apkDirPath, {fDevice, deviceId}) {
 			case 0:
 				console.log('LOG Uninstalling');
 				try {
-					await client.uninstall(deviceId, appPkg);
+				await client.uninstall(deviceId, appPkg);
 				} catch(err) {
-					console.log('FAILURE-LOG Uninstall Failed');
+					console.log(err + 'FAILURE-LOG Uninstall Failed');
 					continue;
 				}
 				console.log('LOG Installing ' + deviceId);
-				child_process.spawnSync(`adb`, ['install', '-rg', apkPath]);
+				await client.install(deviceId, apkPath);
 				console.log('LOG Installed');
 				await sleep(5000);	
 				try {
 					pid = await fDevice.spawn([appPkg]);
 				} catch(err) {
 					console.log('FAILURE-LOG Spawn failed');
+
 					continue;
 				}
 				await sleep(1000);
@@ -143,28 +151,29 @@ async function runApk(apkDirPath, {fDevice, deviceId}) {
 				}
 				await sleep(10000);
 				progressCode++;
-				//console.log('LOG Granting permissions');
-				//child_process.execSync(`adb shell pm grant ${appPkg} android.permission.WRITE_EXTERNAL_STORAGE`);
-				//child_process.execSync(`adb shell pm grant ${appPkg} android.permission.READ_EXTERNAL_STORAGE`);
-				//console.log('LOG Granted permissions');
 			case 5:
 				await executeMonkeyRunner(appPkg);
 				console.log('LOG Monkeyed');
-				progressCode++;
 				//await executeDroidBot(apkDirPath, apkPath);
+				progressCode++;
 			case 6:
 				try {
 					console.log('LOG Uninstalling App');
 					await client.uninstall(deviceId, appPkg);
 					console.log('LOG Uninstalled');
-				} catch(err) {continue;}
+				} catch(err) {console.log(err); continue;}
 				progressCode++;
 			}
 
 			
 		} catch(err) {console.log(err);}
 	}
-	console.log('LOG Done APK')
+	if(progressCode < 7) {
+		console.log('LOG Uninstalling due to error');
+		await client.uninstall(deviceId, appPkg);
+	} else {
+		console.log('LOG Done APK');
+	}
 }
 function waitDone(script) {
 	return new Promise((resolve, reject) => {
@@ -182,18 +191,28 @@ async function run() {
 	const devices = await client.listDevices();
 	const deviceId = devices[0].id;
 	console.log('LOG Device ' + deviceId);
-	/*const files = await readdir(datasetPath);
+	const files = await readdir(datasetPath);
 	for(let file of files) {
 		const fileStat = fs.statSync(path.join(datasetPath, file));
 		if(fileStat.isDirectory()) {
 			try {
-				await runApk(path.join(datasetPath, file), {fDevice, deviceId});
+				await runFamily(path.join(datasetPath, file), {fDevice, deviceId});
 			} catch(err) {
 				console.log('FATAL-ERROR ' + file + err);
 			}
 		}
-	}*/
-	await runApk(datasetPath, {fDevice, deviceId});
+	}
+	//await runApk(datasetPath, {fDevice, deviceId});
+}
+
+async function runFamily(familyDirPath, obj) {
+	const files = await readdir(familyDirPath);
+	for(let file of files) {
+		const fileStat = fs.statSync(path.join(familyDirPath, file));
+		if(fileStat.isDirectory()) {
+			await runApk(path.join(familyDirPath, file), obj);
+		}
+	} 
 }
 
 if(!datasetPath) {
