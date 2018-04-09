@@ -27,4 +27,4 @@ for fam in os.listdir(source_dir):
 		else:
 			filenames = random.sample(os.listdir(source_dir+fam+"/"+var+"/" ), 20)
 		for j in filenames:
-			print(source_dir+fam+"/"+var+"/"+j,file=inp_list)
+			print(fam+"/"+var+"/"+j,file=inp_list)
