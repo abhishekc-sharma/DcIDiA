@@ -1,0 +1,5 @@
+1. Run apkselections.py (dataset/root/as/input)
+2. This should create apkpaths.txt
+3. Run get_apis.py with input : path/to/apkpaths.txt same/dataset/root/ SuSi/file1 SuSi/file2 linenumber(0 if all)
+4. ???
+5. Profit
