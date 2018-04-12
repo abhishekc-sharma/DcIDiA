@@ -51,7 +51,7 @@ const ROOT_URL = `https://apkpure.com`;
 
 async function startCategoryDownload(browser, page, url, baseDir) {
 	
-	for(let i = 1; i <= 3; i++) {
+	for(let i = 2; i <= 4; i++) {
 		await page.goto(`${url}?page=${i}`);
 		const appUrls = await page.$$eval('ul#pagedata li div.category-template-img a', links => links.map(link => link.getAttribute('href')));		
 		for(const appUrl of appUrls) {
