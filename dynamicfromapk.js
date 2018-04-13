@@ -29,6 +29,16 @@ async function executeMonkeyRunner(appPkg) {
 	});
 }
 
+function waitDone(script) {
+	return new Promise((resolve, reject) => {
+		console.log('LOG Waiting for Done')
+		script.events.listen('message', message => {
+			console.log('LOG Got Message');
+			if(message.type === 'send' && message.payload && message.payload.done === 'Loaded') resolve();
+		});
+	});
+}
+
 async function main() {
 	try {
 		const apiPath = process.argv[2];
