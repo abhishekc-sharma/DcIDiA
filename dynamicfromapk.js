@@ -30,9 +30,12 @@ async function executeMonkeyRunner(appPkg) {
 }
 
 async function main() {
-	const apiPath = process.argv[2];
-	const apiPathBaseName = path.basename(apiPath);
-	const apkPath = path.join(path.dirname(apiPath), apiPathBaseName.slice(5, apiPathBaseName.indexOf('.')) + '.apk');
+	try {
+		const apiPath = process.argv[2];
+		const apkPath = process.argv[3];
+	} catch(err) {
+		console.log('LOG Usage: node <thisscript.js> <path_to_txt> <path_to_apk>');
+	}
 	console.log('LOG New APK ', apiPath, apkPath);
 	const fDevice = await frida.getUsbDevice();
 	const client = adb.createClient();
