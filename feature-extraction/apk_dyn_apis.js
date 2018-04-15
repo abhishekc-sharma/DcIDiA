@@ -40,9 +40,10 @@ function waitDone(script) {
 }
 
 async function main() {
+	let apiPath, apkPath;
 	try {
-		const apiPath = process.argv[2];
-		const apkPath = process.argv[3];
+		apiPath = process.argv[2];
+		apkPath = process.argv[3];
 	} catch(err) {
 		console.log('LOG Usage: node <thisscript.js> <path_to_txt> <path_to_apk>');
 	}
@@ -107,7 +108,8 @@ async function main() {
 
 			await sleep(1000);
 			console.log('LOG Generate');
-			const scriptTxt = await generateScript(apiPath);
+			const apiLines = await readFile(apiPath, { encoding: 'utf-8'});
+			const scriptTxt = await generateScript(JSON.parse(apiLines));
 
 			console.log('LOG Create Script');
 			try {

@@ -1,0 +1,21 @@
+{
+  "name": "feature-extraction",
+  "version": "1.0.0",
+  "description": "Extract features from APKs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "ACS, AR, GJP",
+  "license": "ISC",
+  "dependencies": {
+    "adb": "^0.2.0",
+    "apkreader": "^1.0.7",
+    "command-exists": "^1.2.5",
+    "frida": "^10.7.7",
+    "line-by-line": "^0.1.6",
+    "node-notifier": "^5.2.1",
+    "ora": "^2.0.0",
+    "shelljs": "^0.8.1"
+  }
+}

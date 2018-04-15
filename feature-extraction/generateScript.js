@@ -67,38 +67,28 @@ function overloadedMethodHook(className, methodName, argTypes = [], count) {
 }
 
 
-async function generateScript(inputFile) {
+async function generateScript(inputLines) {
 	return new Promise((resolve, reject) => {
-		const lr = new LineByLineReader(inputFile);
 		let op = `if(Java.available) {
 				console.log('LOG Java is available');
 				Java.perform(function() {
 		`
 		let hookCount = 0;
-		lr.on('line', line => {
-			if(line.indexOf('<') == -1 || line.indexOf('$') != '-1') return;
+		for(let line of inputLines) {
+			if(line.indexOf('<') == -1 || line.indexOf('$') != '-1') continue;
 			const parts = line.split(/[<:\s()>,]/).filter(part => part.length > 0);
 			const className = parts[0], methodName = parts[2];
 			op += classInstance(className);
 			op += overloadedMethodHook(className, methodName, parts.slice(3, parts.length - 1), hookCount); 
 			hookCount = hookCount + 1;
-		});
+		}
 
-		lr.on('end', () => {
-			op += `
-				});
-				console.log('LOG all hooks completed');
-				send({done: 'Loaded'});
-			}
-			`;
-			resolve(op);
-		});
-
-		lr.on('error', (err) => {
-			reject(err);
-		});
-
-
+		op += `
+			});
+			console.log('LOG all hooks completed');
+			send({done: 'Loaded'});
+		}
+		`;
 	});
 }
 
