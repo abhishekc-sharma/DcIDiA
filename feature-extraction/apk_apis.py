@@ -30,20 +30,21 @@ for i in range(2, len(sys.argv)):
     input_file = sys.argv[i]
     with open(input_file) as f:
         for line in f:
+            line = line[0:line.find('>')]
             parts = re.compile("[<:\s(),>]").split(line)
             parts = [part for part in parts if len(part) > 0]
             if len(parts) <= 1:
                 continue
             className = parts[0]
             methodName = parts[2]
-            argsString = ",".join(parts[3:-1])
+            argsString = ",".join(parts[3:])
             if not (className in sosiClassDict):
                 sosiClassDict[className] = (set([]), {})
             sosiClassDict[className][0].add(methodName)
             if not (methodName in sosiClassDict[className][1]):
                 sosiClassDict[className][1][methodName] = []
             sosiClassDict[className][1][methodName].append(argsString)
-
+print(sosiClassDict['android.net.ConnectivityManager'])
 if os.path.exists(os.path.join(maraPath, "data")) and os.path.isdir(os.path.join(maraPath, "data")):
 	shutil.rmtree(os.path.join(maraPath, "data"))
 

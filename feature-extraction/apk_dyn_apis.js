@@ -110,12 +110,11 @@ async function main() {
 			console.log('LOG Generate');
 			const apiLines = await readFile(apiPath, { encoding: 'utf-8'});
 			const scriptTxt = await generateScript(JSON.parse(apiLines));
-
 			console.log('LOG Create Script');
 			try {
 				script = await session.createScript(scriptTxt);
 			} catch(err) {
-				console.log('ERROR Create Script');
+				console.log('ERROR Create Script' + err);
 				continue;
 			}
 

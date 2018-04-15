@@ -67,7 +67,7 @@ function overloadedMethodHook(className, methodName, argTypes = [], count) {
 }
 
 
-async function generateScript(inputLines) {
+function generateScript(inputLines) {
 	return new Promise((resolve, reject) => {
 		let op = `if(Java.available) {
 				console.log('LOG Java is available');
@@ -89,6 +89,7 @@ async function generateScript(inputLines) {
 			send({done: 'Loaded'});
 		}
 		`;
+		resolve(op);
 	});
 }
 

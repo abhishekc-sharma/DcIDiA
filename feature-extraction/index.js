@@ -2,10 +2,8 @@ const commander = require('commander');
 const commandExists = require('command-exists');
 const fs = require('fs');
 const LineByLineReader = require('line-by-line');
-const notifier = require('node-notifier');
 const path = require('path');
 const util = require('util');
-const shell = require('shelljs')
 const childProcess = require('child_process');
 
 const APK_PERMISSIONS_SCRIPT = '';
@@ -77,6 +75,9 @@ async function checkAndEnsureArgs(commander) {
 	if(!commander.output) {
 		throw new Error(`Missing required argument --output|-o`);
 	}
+
+	commander.index = commander.index || 1;
+	commander.index = parseInt(commander.index, 10);
 }
 
 async function main() {
@@ -85,7 +86,7 @@ async function main() {
 	commander
 		.version('1.0.0')
 		.option('-f, --file <datapathsfile>', 'OPTIONAL | Process APKs from file with one path to and APK per line')
-		.option('-i, --index <apkindex>', 'DEFAULT: 1 | Index starting from 1 to start processing APKs from when -f|--file is used', parseInt, 1)
+		.option('-i, --index <apkindex>', 'DEFAULT: 1 | Index starting from 1 to start processing APKs from when -f|--file is used', )
 		.option('-d, --data <datapath>', 'REQUIRED | Process APKs recursively starting from directory')
 		.option('-o, --output <outputpath>', 'REQUIRED | Path to the file to write output')
 		.option('-t, --type <apkstype>', 'DEFAULT: malware | Indicate if input APKs are goodware or malware [malware|goodware]', /^(malware|goodware)$/, 'malware')
@@ -161,7 +162,6 @@ async function processDataFile(filePath, dataPath, index, opStream) {
 		}
 		apkPath = path.join(dataPath, apkPath);
 		const apkStatus = await processApk(apkPath, opStream);
-		console.log(apkStatus);
 		if(apkStatus) {
 			globalProgress.current += 1;
 		} else {
@@ -182,7 +182,16 @@ async function processApk(apkPath, opStream) {
 	apkApisOp = apkApisOp.slice(1, apkApisOp.length - 1);
 	await fs.writeFile('./apisFile', JSON.stringify(apkApisOp));
 	const dynOpFile = path.join(path.dirname(apkPath), path.basename(apkPath) + 'dynOp');
-	childProcess.execSync(`node apk_dyn_apis.js ./apisFile ${apkPath} > ${dynOpFile}`);
+	const cp = childProcess.exec(`node apk_dyn_apis.js ./apisFile ${apkPath} `);
+	cp.stdout.pipe(fs.createWriteStream(dynOpFile));
+	try {
+		await new Promise((resolve, reject) => {
+			cp.on('error', (err) => reject(err));
+			cp.on('exit', () => resolve());
+		});
+	} catch (err) {
+		console.log('Dynamic Failed');
+	}
 	return true;
 }
 
