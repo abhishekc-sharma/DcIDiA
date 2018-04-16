@@ -18,8 +18,10 @@ fs.writeFile = util.promisify(fs.writeFile);
 
 const globalProgress = {
 	total: 0,
-	current: 0
+	current: 0,
+	error: 0
 };
+
 
 async function ensurePrerequisites() {
 	try {
@@ -106,7 +108,7 @@ async function processDataDir(dataPath, { first }, opStream) {
 	if(first) {
 		const apkCount = parseInt(childProcess.execSync(`find ${dataPath} -name "*.apk" | wc -l`, {encoding: 'utf-8'}).trim(), 10);
 		globalProgress.total = apkCount;
-		console.log(`${globalProgress.current}/${globalProgress.total}`);
+		console.log(`(${globalProgress.current}, ${globalProgress.error})/${globalProgress.total}`);
 	}
 	
 	const directoryContents = await fs.readdir(dataPath);
@@ -117,8 +119,10 @@ async function processDataDir(dataPath, { first }, opStream) {
 			const apkStatus = await processApk(directoryItem, opStream);
 			if(apkStatus) {
 				globalProgress.current += 1;
+			} else {
+				globalProgress.error += 1;
 			}
-			console.log(`${globalProgress.current}/${globalProgress.total}`);
+			console.log(`(${globalProgress.current}, ${globalProgress.error})/${globalProgress.total}`);
 		} else if(directoryItemStat.isDirectory()) {
 			await processDataDir(directoryItem, { first: false}, opStream);
 		}
@@ -129,7 +133,7 @@ async function processDataFile(filePath, dataPath, index, opStream) {
 	const apkCount = parseInt(childProcess.execSync(`wc -l ${filePath}`, { encoding: 'utf-8' }).split(' ')[0], 10);
 	globalProgress.total = apkCount;
 	globalProgress.current = index - 1;
-	console.log(`${globalProgress.current}/${globalProgress.total}`);
+	console.log(`(${globalProgress.current}, ${globalProgress.error})/${globalProgress.total}`);
 	let i = 0;
 	const apkLines = await fs.readFile(filePath, { encoding: 'utf-8'}).then((res) => res.split('\n').filter(l => l.length > 0));
 	for(let apkPath of apkLines) {
@@ -142,22 +146,26 @@ async function processDataFile(filePath, dataPath, index, opStream) {
 		const apkStatus = await processApk(apkPath, opStream);
 		if(apkStatus) {
 			globalProgress.current += 1;
+		} else {
+			globalProgress.error += 1;
 		}
-		console.log(`${globalProgress.current}/${globalProgress.total}`);
+		console.log(`(${globalProgress.current}, ${globalProgress.error})/${globalProgress.total}`);
 	}
 	console.log('OMG Done');
 }
 
 async function processApk(apkPath, opStream) {
+	let apkPermissions;
 	try {
-		const apkPermissions = childProcess.execSync(`python3 apk_permissions.py ${apkPath}`, { encoding: 'utf-8' }).trim();
+		apkPermissions = childProcess.execSync(`python3 apk_permissions.py ${apkPath}`, { encoding: 'utf-8' }).trim();
 	} catch(err) {
 		console.log('Error Permissions');
 		return false;
 	}
 	console.log('Permissions');
+	let apkApisOp; 
 	try {
-		let apkApisOp = childProcess.execSync(`python3 apk_apis.py ${apkPath} ../dont_look_inside/Ouput_CatSinks_v0_9.txt ../dont_look_inside/Ouput_CatSources_v0_9.txt`, { encoding: 'utf-8'}).split('\n');
+		apkApisOp = childProcess.execSync(`python3 apk_apis.py ${apkPath} ../dont_look_inside/Ouput_CatSinks_v0_9.txt ../dont_look_inside/Ouput_CatSources_v0_9.txt`, { encoding: 'utf-8'}).split('\n');
 	} catch(err) {
 		console.log('Error Static APIs');
 		return false;
