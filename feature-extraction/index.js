@@ -117,8 +117,6 @@ async function processDataDir(dataPath, { first }, opStream) {
 			const apkStatus = await processApk(directoryItem, opStream);
 			if(apkStatus) {
 				globalProgress.current += 1;
-			} else {
-				console.log(`APK Error ${directoryItem}`);
 			}
 			console.log(`${globalProgress.current}/${globalProgress.total}`);
 		} else if(directoryItemStat.isDirectory()) {
@@ -144,8 +142,6 @@ async function processDataFile(filePath, dataPath, index, opStream) {
 		const apkStatus = await processApk(apkPath, opStream);
 		if(apkStatus) {
 			globalProgress.current += 1;
-		} else {
-			console.log(`APK Error ${apkPath}`);
 		}
 		console.log(`${globalProgress.current}/${globalProgress.total}`);
 	}
@@ -153,14 +149,24 @@ async function processDataFile(filePath, dataPath, index, opStream) {
 }
 
 async function processApk(apkPath, opStream) {
-	const apkPermissions = childProcess.execSync(`python3 apk_permissions.py ${apkPath}`, { encoding: 'utf-8' }).trim();
+	try {
+		const apkPermissions = childProcess.execSync(`python3 apk_permissions.py ${apkPath}`, { encoding: 'utf-8' }).trim();
+	} catch(err) {
+		console.log('Error Permissions');
+		return false;
+	}
 	console.log('Permissions');
-	let apkApisOp = childProcess.execSync(`python3 apk_apis.py ${apkPath} ../dont_look_inside/Ouput_CatSinks_v0_9.txt ../dont_look_inside/Ouput_CatSources_v0_9.txt`, { encoding: 'utf-8'}).split('\n');
+	try {
+		let apkApisOp = childProcess.execSync(`python3 apk_apis.py ${apkPath} ../dont_look_inside/Ouput_CatSinks_v0_9.txt ../dont_look_inside/Ouput_CatSources_v0_9.txt`, { encoding: 'utf-8'}).split('\n');
+	} catch(err) {
+		console.log('Error Static APIs');
+		return false;
+	}
 	const apkApis = apkApisOp[0].trim();
 	if(apkApis.startsWith('Error')) {
 		return false;
 	}
-	console.log('Static APIs')
+	console.log('Static APIs');
 	opStream.write(apkPermissions + apkApis + '\n');
 	apkApisOp = apkApisOp.slice(1, apkApisOp.length - 1);
 	await fs.writeFile('./apisFile', JSON.stringify(apkApisOp));
@@ -168,10 +174,10 @@ async function processApk(apkPath, opStream) {
 	try {
 		childProcess.execSync(`node apk_dyn_apis.js ./apisFile ${apkPath} > ${dynOpFile}`);
 	} catch(err) {
-		console.log('Dynamic Failed');
+		console.log('Error Dynamic APIs');
 		return true;
 	}
-		console.log('Dynamic APIs');
+	console.log('Dynamic APIs');
 	return true;
 }
 
