@@ -9,7 +9,7 @@ const getHookImplementationFn = function(className, methodName, argTypesStr) {
 		try {
 			const result = this.${methodName}.overload(${argTypesStr}).apply(this, args);
 		} catch(err) {
-			console.log('LOG ' + err);
+			console.log('LOG Frida Apply' + className +' ' + methodName + ' '+ argTypesStr + '  ' + err);
 		}		
 		return result;
 	}`;

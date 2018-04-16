@@ -132,36 +132,15 @@ async function processDataFile(filePath, dataPath, index, opStream) {
 	globalProgress.total = apkCount;
 	globalProgress.current = index - 1;
 	console.log(`${globalProgress.current}/${globalProgress.total}`);
-	const lr = new LineByLineReader(filePath);
 	let i = 0;
-	while(true) {
-		let apkPath; 
-		try {
-			apkPath = await Promise.race([
-				new Promise((resolve, reject) => {
-					lr.on('line', (line) => {
-						lr.removeAllListeners('line');
-						lr.removeAllListeners('end');
-						resolve(line)
-					});
-				}),
-				new Promise((resolve, reject) => {
-					lr.on('end', () => {
-						lr.removeAllListeners('line');
-						lr.removeAllListeners('end');
-						reject(new Error('Done'));
-					});	
-				})
-			]);
-		} catch(err) {
-			console.log('Done with All');
-			break;
-		}
+	const apkLines = await fs.readFile(filePath, { encoding: 'utf-8'}).then((res) => res.split('\n').filter(l => l.length > 0));
+	for(let apkPath of apkLines) {
 		i++;
 		if(i < index) {
 			continue;
 		}
-		apkPath = path.join(dataPath, apkPath);
+		apkPath = path.join(dataPath, `"${apkPath}"`);
+		console.log(apkPath);
 		const apkStatus = await processApk(apkPath, opStream);
 		if(apkStatus) {
 			globalProgress.current += 1;
