@@ -44,7 +44,6 @@ for i in range(2, len(sys.argv)):
             if not (methodName in sosiClassDict[className][1]):
                 sosiClassDict[className][1][methodName] = []
             sosiClassDict[className][1][methodName].append(argsString)
-print(sosiClassDict['android.net.ConnectivityManager'])
 if os.path.exists(os.path.join(maraPath, "data")) and os.path.isdir(os.path.join(maraPath, "data")):
 	shutil.rmtree(os.path.join(maraPath, "data"))
 
