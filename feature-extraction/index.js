@@ -154,6 +154,7 @@ async function processDataFile(filePath, dataPath, index, opStream) {
 				})
 			]);
 		} catch(err) {
+			console.log('Done with All');
 			break;
 		}
 		i++;
@@ -169,29 +170,29 @@ async function processDataFile(filePath, dataPath, index, opStream) {
 		}
 		console.log(`${globalProgress.current}/${globalProgress.total}`);
 	}
+	console.log('OMG Done');
 }
 
 async function processApk(apkPath, opStream) {
 	const apkPermissions = childProcess.execSync(`python3 apk_permissions.py ${apkPath}`, { encoding: 'utf-8' }).trim();
+	console.log('Permissions');
 	let apkApisOp = childProcess.execSync(`python3 apk_apis.py ${apkPath} ../dont_look_inside/Ouput_CatSinks_v0_9.txt ../dont_look_inside/Ouput_CatSources_v0_9.txt`, { encoding: 'utf-8'}).split('\n');
 	const apkApis = apkApisOp[0].trim();
 	if(apkApis.startsWith('Error')) {
 		return false;
 	}
+	console.log('Static APIs')
 	opStream.write(apkPermissions + apkApis + '\n');
 	apkApisOp = apkApisOp.slice(1, apkApisOp.length - 1);
 	await fs.writeFile('./apisFile', JSON.stringify(apkApisOp));
 	const dynOpFile = path.join(path.dirname(apkPath), path.basename(apkPath) + 'dynOp');
-	const cp = childProcess.exec(`node apk_dyn_apis.js ./apisFile ${apkPath} `);
-	cp.stdout.pipe(fs.createWriteStream(dynOpFile));
 	try {
-		await new Promise((resolve, reject) => {
-			cp.on('error', (err) => reject(err));
-			cp.on('exit', () => resolve());
-		});
-	} catch (err) {
+		childProcess.execSync(`node apk_dyn_apis.js ./apisFile ${apkPath} > ${dynOpFile}`);
+	} catch(err) {
 		console.log('Dynamic Failed');
+		return true;
 	}
+		console.log('Dynamic APIs');
 	return true;
 }
 
