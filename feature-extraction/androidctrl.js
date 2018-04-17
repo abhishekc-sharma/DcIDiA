@@ -49,7 +49,7 @@ function sleep(ms) {
 var Android = {
   start: function(avdName) {
     return spawnWaitFor(
-      'emulator -verbose -wipe-data -avd "' + avdName + '"',
+      'emulator -verbose -no-snapshot -wipe-data -avd "' + avdName + '"',
       /emulator: control console listening on port (\d+), ADB on port \d+/
     ).then(function(result) {
       return {

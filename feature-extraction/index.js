@@ -23,7 +23,7 @@ const globalProgress = {
 	error: 0
 };
 
-let fridapath, emulatorName;
+let fridapath, emulatorName, emulatorId;
 async function ensurePrerequisites() {
 	try {
 		await Promise.all([
@@ -82,6 +82,19 @@ async function checkAndEnsureArgs(commander) {
 
 	if(!commander.output) {
 		throw new Error(`Missing required argument --output|-o`);
+	}
+	
+	let opExists = false;
+	try {
+		await fs.access(commander.output, fs.constants.F_OK);
+		opExists = true;
+	} catch(err) {
+		opExists = false;
+		
+	}
+
+	if(opExists) {
+		throw new Error(`Argument to --output ${commander.output} already exists`);
 	}
 
 	if(!commander.avd) {
@@ -152,6 +165,22 @@ async function processDataDir(dataPath, { first }, opStream) {
 	}
 }
 
+function sleep(ms) {
+	return new Promise((resolve, reject) => {
+		setTimeout(() => { resolve(); }, ms);
+	});
+}
+
+async function makeSureEmulatorClosed() {
+	for(let i = 0; i < 600; i++) {
+		let res = await androidctrl.devices(emulatorName);
+		if(!res.length) {
+			return true;
+		}
+		await sleep(1000);
+	}
+}
+
 async function processDataFile(filePath, dataPath, index, opStream) {
 	const apkCount = parseInt(childProcess.execSync(`wc -l ${filePath}`, { encoding: 'utf-8' }).split(' ')[0], 10);
 	globalProgress.total = apkCount;
@@ -164,7 +193,19 @@ async function processDataFile(filePath, dataPath, index, opStream) {
 		if(i < index) {
 			continue;
 		}
-		await checkAndSetupEmulator();
+		if(i % 20 === 0) {
+			console.log('Stopping AVD')
+			try {
+				await androidctrl.stop(emulatorId);
+				await makeSureEmulatorClosed();
+			} catch(err) {
+				console.log('Emulator Stop Error');
+			}	
+		}
+		let res = await checkAndSetupEmulator();
+		if(res) {
+			emulatorId = res;
+		}
 		apkPath = path.join(dataPath, `"${apkPath}"`);
 		console.log(apkPath);
 		const apkStatus = await processApk(apkPath, opStream);
@@ -204,7 +245,7 @@ async function processApk(apkPath, opStream) {
 	await fs.writeFile('./apisFile', JSON.stringify(apkApisOp));
 	const dynOpFile = path.join(path.dirname(apkPath), path.basename(apkPath) + 'dynOp');
 	try {
-		childProcess.execSync(`node apk_dyn_apis.js ./apisFile ${apkPath} > ${dynOpFile}`);
+		childProcess.execSync(`node apk_dyn_apis.js ./apisFile ${apkPath} > ${dynOpFile}`, { timeout: 1000 * 60 * 7 });
 	} catch(err) {
 		console.log('Error Dynamic APIs');
 		return true;
@@ -222,8 +263,11 @@ async function checkAndSetupEmulator() {
 		await androidctrl.adb(id, `push ${fridaPath} /data/local/tmp/frida-server`);
 		await androidctrl.adb(id, `shell chmod 755 /data/local/tmp/frida-server`);
 		childProcess.exec(`adb shell /data/local/tmp/frida-server`);
-		console.log('Started');
+		console.log('Started AVD');
+		return id;
 	}
+	
+	return false;
 }
 
 main().catch(err => console.log('FATAL-ERROR ' + err));
