@@ -13,7 +13,9 @@
     "apkreader": "^1.0.7",
     "command-exists": "^1.2.5",
     "commander": "^2.15.1",
+    "ezspawn": "^1.1.0",
     "frida": "^10.7.7",
-    "line-by-line": "^0.1.6"
+    "line-by-line": "^0.1.6",
+    "spawn-wait-for": "^1.1.0"
   }
 }

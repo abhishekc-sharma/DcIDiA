@@ -1,3 +1,4 @@
+const androidctrl = require('./androidctrl');
 const commander = require('commander');
 const commandExists = require('command-exists');
 const fs = require('fs');
@@ -22,7 +23,7 @@ const globalProgress = {
 	error: 0
 };
 
-
+let fridapath, emulatorName;
 async function ensurePrerequisites() {
 	try {
 		await Promise.all([
@@ -31,7 +32,8 @@ async function ensurePrerequisites() {
 			commandExists('find'),
 			commandExists('python'),
 			commandExists('python3'),
-			commandExists('aapt')
+			commandExists('aapt'),
+			commandExists('emulator')
 		]);
 	} catch(err) {
 		throw new Error('adb not found in PATH');
@@ -41,6 +43,10 @@ async function ensurePrerequisites() {
 async function checkAndParseEnv() {
 	if(!process.env['MARA_PATH']) {
 		throw new Error('Environment variable MARA_PATH not found');
+	}
+
+	if(!process.env['MARA_PATH']) {
+		throw new Error('Environment variable EMULATOR_PATH not found');
 	}
 }
 
@@ -78,6 +84,21 @@ async function checkAndEnsureArgs(commander) {
 		throw new Error(`Missing required argument --output|-o`);
 	}
 
+	if(!commander.avd) {
+		throw Error('Missing option --avd');
+	}
+	
+	/*let res = await androidctrl.hasAVD(`${commander.avd}`);
+	if(!res) {
+		throw Error(`Argument to --avd ${commander.avd} does not exist`);
+	}*/
+
+	if(!commander.frida) {
+		throw Error('Missing option --frida');
+	}
+	fridaPath = commander.frida;
+	emulatorName = commander.avd;
+
 	commander.index = commander.index || 1;
 	commander.index = parseInt(commander.index, 10);
 }
@@ -92,6 +113,8 @@ async function main() {
 		.option('-d, --data <datapath>', 'REQUIRED | Process APKs recursively starting from directory')
 		.option('-o, --output <outputpath>', 'REQUIRED | Path to the file to write output')
 		.option('-t, --type <apkstype>', 'DEFAULT: malware | Indicate if input APKs are goodware or malware [malware|goodware]', /^(malware|goodware)$/, 'malware')
+		.option('--avd <AVDName>', 'REQUIRED | Name of the avd to use')
+		.option('--frida <FirdaServerPath>', 'REQUIRED | Path to frida-server executable to use')
 		.parse(process.argv);
 	await checkAndEnsureArgs(commander);
 	const apkType = commander.type === 'malware' ? 1 : 0;
@@ -141,6 +164,7 @@ async function processDataFile(filePath, dataPath, index, opStream) {
 		if(i < index) {
 			continue;
 		}
+		await checkAndSetupEmulator();
 		apkPath = path.join(dataPath, `"${apkPath}"`);
 		console.log(apkPath);
 		const apkStatus = await processApk(apkPath, opStream);
@@ -187,6 +211,19 @@ async function processApk(apkPath, opStream) {
 	}
 	console.log('Dynamic APIs');
 	return true;
+}
+
+async function checkAndSetupEmulator() {
+	let res = await androidctrl.devices(emulatorName);
+	if(!res.length) {
+		console.log('Starting AVD');
+		const {id} = await androidctrl.start(emulatorName);
+		await androidctrl.ensureReady(id);
+		await androidctrl.adb(id, `push ${fridaPath} /data/local/tmp/frida-server`);
+		await androidctrl.adb(id, `shell chmod 755 /data/local/tmp/frida-server`);
+		childProcess.exec(`adb shell /data/local/tmp/frida-server`);
+		console.log('Started');
+	}
 }
 
 main().catch(err => console.log('FATAL-ERROR ' + err));
