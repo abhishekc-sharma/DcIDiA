@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "adb": "^0.2.0",
+    "adbkit-apkreader": "^3.0.0",
     "apkreader": "^1.0.7",
     "command-exists": "^1.2.5",
     "commander": "^2.15.1",
