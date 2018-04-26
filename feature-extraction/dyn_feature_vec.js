@@ -40,12 +40,14 @@ fs.readFile = util.promisify(fs.readFile);
 let apkDirectory;
 let counter = 0;
 let success = 0;
+let failed = 0;
 async function main() {
 	const dataDirectory = process.argv[2];
-	apkDirectory = process.argv[2];
+	apkDirectory = process.argv[3];
 	const results = await processDir(dataDirectory);
 	const resultStr = results.join('\n');
 	console.log(resultStr);
+	process.stderr.write(`${counter} ${success} ${failed}`);
 }
 
 async function processDir(dirPath) {
@@ -75,7 +77,8 @@ async function processFile(filePath) {
 	counter++;
 	const contents = await fs.readFile(filePath, {encoding: 'utf-8'});
 	const contentLines = contents.split('\n').filter(line => line.includes('EVENT')  && !line.includes('android.widget'));
-	if(contentLines.length < 30) {		
+	if(contentLines.length < 30) {
+		failed++;		
 		return false;
 	}
 	const apiSet = new Set();
@@ -102,11 +105,12 @@ async function processFile(filePath) {
 
 	let apkPermissions;	
 	try {
-	const apkPath = filePath.replace('dynOp', '');
-	apkPermissions = childProcess.execSync(`python3 apk_permissions.py "${apkPath}"`, { encoding: 'utf-8' }).trim();
+	const apkPath = path.basename(filePath.replace('dynOp', ''));
+	const actualApkPath = childProcess.execSync(`find "${apkDirectory}" -name "${apkPath}"`, { encoding: 'utf-8' }).trim().split('\n')[0];
+	apkPermissions = childProcess.execSync(`python3 apk_permissions.py "${actualApkPath}"`, { encoding: 'utf-8' }).trim();
 
 	} catch(err) {
-		
+		process.stderr.write('beebop\n');
 		return false;
 	}
 	success++;
