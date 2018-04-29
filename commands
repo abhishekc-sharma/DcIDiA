@@ -1,0 +1,3 @@
+MARA_PATH=../../../../../Downloads/AndroidProject/MARA_Framework/ node index.js -d /media/abhishek/NewVolume/DeviceandPersonal/ -o ../outputs/test --avd Nexus5XAPI23 -f ../lists/apkpaths.txt --frida ../../../../../Downloads/frida-server-10.7.7-android-x86/frida-server
+
+

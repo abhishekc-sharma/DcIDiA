@@ -23,7 +23,7 @@ const globalProgress = {
 	error: 0
 };
 
-let fridapath, emulatorName, emulatorId;
+let fridapath, emulatorName, emulatorId, type, predict;
 async function ensurePrerequisites() {
 	try {
 		await Promise.all([
@@ -84,19 +84,6 @@ async function checkAndEnsureArgs(commander) {
 		throw new Error(`Missing required argument --output|-o`);
 	}
 	
-	let opExists = false;
-	try {
-		await fs.access(commander.output, fs.constants.F_OK);
-		opExists = true;
-	} catch(err) {
-		opExists = false;
-		
-	}
-
-	if(opExists) {
-		throw new Error(`Argument to --output ${commander.output} already exists`);
-	}
-
 	if(!commander.avd) {
 		throw Error('Missing option --avd');
 	}
@@ -114,6 +101,12 @@ async function checkAndEnsureArgs(commander) {
 
 	commander.index = commander.index || 1;
 	commander.index = parseInt(commander.index, 10);
+
+	type = commander.type;
+
+	if(commander.predict) {
+		predict = true;
+	}
 }
 
 async function main() {
@@ -128,16 +121,23 @@ async function main() {
 		.option('-t, --type <apkstype>', 'DEFAULT: malware | Indicate if input APKs are goodware or malware [malware|goodware]', /^(malware|goodware)$/, 'malware')
 		.option('--avd <AVDName>', 'REQUIRED | Name of the avd to use')
 		.option('--frida <FirdaServerPath>', 'REQUIRED | Path to frida-server executable to use')
+		.option('-p --predict', 'DEFAULT: false | Indicate if predictions need to be made')
 		.parse(process.argv);
 	await checkAndEnsureArgs(commander);
 	const apkType = commander.type === 'malware' ? 1 : 0;
-	const opStream = fs.createWriteStream(commander.output);
+	const opStream = {
+		permissions: fs.createWriteStream(commander.output + '_permissions.csv'),
+		apis: fs.createWriteStream(commander.output + '_apis.csv'),
+		dynamic: fs.createWriteStream(commander.output + '_dynamic.csv'),
+		statics: fs.createWriteStream(commander.output + '_statics.csv'),
+		hybrid: fs.createWriteStream(commander.output + '_hybrid.csv'),
+		
+	};
 	if(commander.file) {
 		await processDataFile(commander.file, commander.data, commander.index, opStream);
 	} else if(commander.data) {
 		await processDataDir(commander.data, { first: true }, opStream);
 	}
-	opStream.end();
 }
 
 async function processDataDir(dataPath, { first }, opStream) {
@@ -152,9 +152,10 @@ async function processDataDir(dataPath, { first }, opStream) {
 		directoryItem = path.join(dataPath, directoryItem);
 		directoryItemStat = await fs.stat(directoryItem);
 		if(directoryItemStat.isFile() && path.extname(directoryItem) === '.apk') {
-			const apkStatus = await processApk(directoryItem, opStream);
+			const apkStatus = await processApk(directoryItem);
 			if(apkStatus) {
 				globalProgress.current += 1;
+				console.log(apkStatus);
 			} else {
 				globalProgress.error += 1;
 			}
@@ -208,8 +209,21 @@ async function processDataFile(filePath, dataPath, index, opStream) {
 		}
 		apkPath = path.join(dataPath, `"${apkPath}"`);
 		console.log(apkPath);
-		const apkStatus = await processApk(apkPath, opStream);
+		const apkStatus = await processApk(apkPath);
 		if(apkStatus) {
+			//console.log(apkStatus);
+			if(predict) {
+				let predictionOp;
+				try {
+					predictionOp = childProcess.execSync(`PERMISSIONS="${apkStatus.permissions.slice(0, apkStatus.permissions.length -1)}" APIS="${apkStatus.apis}" DYNAMIC="${apkStatus.dynamic}" python ../models/predict.py`, {encoding: 'utf-8', cwd: '../models/'}).trim().split('\n');
+					console.log(predictionOp[predictionOp.length -1]);
+				} catch(err) {
+					console.log("Prediction Error " + err);
+				}
+				
+			} else {
+				
+			}		
 			globalProgress.current += 1;
 		} else {
 			globalProgress.error += 1;
@@ -219,7 +233,7 @@ async function processDataFile(filePath, dataPath, index, opStream) {
 	console.log('OMG Done');
 }
 
-async function processApk(apkPath, opStream) {
+async function processApk(apkPath) {
 	let apkPermissions;
 	try {
 		apkPermissions = childProcess.execSync(`python3 apk_permissions.py ${apkPath}`, { encoding: 'utf-8' }).trim();
@@ -240,18 +254,81 @@ async function processApk(apkPath, opStream) {
 		return false;
 	}
 	console.log('Static APIs');
-	opStream.write(apkPermissions + apkApis + '\n');
 	apkApisOp = apkApisOp.slice(1, apkApisOp.length - 1);
 	await fs.writeFile('./apisFile', JSON.stringify(apkApisOp));
 	const dynOpFile = path.join(path.dirname(apkPath), path.basename(apkPath) + 'dynOp');
+	let apkDynOp;
 	try {
-		childProcess.execSync(`node apk_dyn_apis.js ./apisFile ${apkPath} > ${dynOpFile}`, { timeout: 1000 * 60 * 7 });
+		apkDynOp = childProcess.execSync(`node apk_dyn_apis.js ./apisFile ${apkPath}`, { timeout: 1000 * 60 * 7, encoding: 'utf-8' });
 	} catch(err) {
 		console.log('Error Dynamic APIs');
-		return true;
+		return false;
 	}
+	
+	const apis = [
+		'android.net.ConnectivityManager.getActiveNetworkInfo',
+		'android.telephony.TelephonyManager.getDeviceId',
+		'android.net.NetworkInfo.getType',
+		'android.app.PendingIntent.getBroadcast',
+		'android.app.admin.DevicePolicyManager.isAdminActive',
+		'android.telephony.TelephonyManager.getNetworkOperatorName',
+		'android.net.ConnectivityManager.getNetworkInfo',
+		'android.os.Environment.getExternalStorageDirectory',
+		'android.os.Environment.getExternalStorageState',
+		'android.database.sqlite.SQLiteOpenHelper.getWritableDatabase',
+		'android.os.Parcel.setDataPosition',
+		'android.os.Handler.sendMessageDelayed',
+		'android.view.View.getAnimation',
+		'android.app.Activity.getSystemService',
+		'android.content.ContextWrapper.getBaseContext',
+		'android.view.View.getBackground',
+		'android.view.View.getVisibility',
+		'android.view.View.setVisibility',
+		'android.content.res.Resources.getDisplayMetrics',
+		'android.view.View.getLayoutDirection',
+		'android.content.Intent.setExtrasClassLoader',
+		'android.accounts.AccountManager.getAccounts',
+		'android.app.ActivityManager.getRunningTasks',
+		'android.app.ActivityManager.getRunningAppProcesses',
+		'android.webkit.WebView.getSettings',
+		'android.telephony.TelephonyManager.getSubscriberId',
+		'android.preference.PreferenceManager.getDefaultSharedPreferences'
+	];
+	
+	const contentLines = apkDynOp.split('\n').filter(line => line.includes('EVENT')  && !line.includes('android.widget'));
+	
+	if(contentLines.length < 30) {
+		console.log('Insufficient Dynamic APIs');
+		return false;
+	}
+	const apiSet = new Set();
+	for(const line of contentLines) {
+		const classMethod = line.split(' ').slice(1).join('.');
+		if(apis.includes(classMethod) && !apiSet.has(classMethod)) {
+			apiSet.add(classMethod);
+		}
+		if(apiSet.size === apis.length) {
+			break;
+		}	
+	}
+
+	const dynFeatureVec = [];
+	let count = 0;
+	for(const api of apis) {
+		if(apiSet.has(api)) {
+			dynFeatureVec.push(1);
+			count++;
+		} else {
+			dynFeatureVec.push(0);
+		}
+	}
+	const dynFeatureStr = dynFeatureVec.join(',');
 	console.log('Dynamic APIs');
-	return true;
+	return {
+		permissions: apkPermissions,
+		apis: apkApis,
+		dynamic: dynFeatureStr
+	};
 }
 
 async function checkAndSetupEmulator() {
